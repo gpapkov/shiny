@@ -1,0 +1,100 @@
+---
+title: "Globe"
+author: "Galen Papkov"
+date: "4/10/2020"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(imager)
+earth = load.image("/Users/gpapkov/OneDrive - Florida Gulf Coast University/Professional Development/BeAM/globe2.jpg") 
+```
+
+# Purpose
+
+This activity will show how to use statistics to estimate the proportion of the earth's surface covered by water (fresh or salt water).  
+
+## Inputs 
+
+Imagine you were able to throw darts at this map.  Choose the number of darts, n, you want to throw (10, 20, or 50).  By default, the color of the points will be black.  
+
+```{r echo=FALSE}
+inputPanel(
+  selectInput("n_points", label = "Sample size:",
+              choices = c(10, 20, 50), selected = 20),
+  selectInput("color", label = "Point color:",
+              choices = c("black", "red", "green"), selected = "black")
+)
+
+renderPlot({ 
+  par(xaxt="n",yaxt="n")
+  plot(earth) 
+  input$resample
+  X<-runif(input$n_points,0,768)
+  Y<-runif(input$n_points,0,332)
+  points(X,Y,pch=16,cex=1,col=input$color)
+  },width=1200,height=700)
+```
+
+## Output
+
+Count the number of points that are in water. Enter the value in the Enter Count cell and click Record. Click Resample to throw another n ``darts". Count the number of points in water, enter the number in the Enter Count box and click Record.  Repeat the process till you obtain a desired number of observed counts.    
+
+```{r echo=FALSE}
+inputPanel(
+  numericInput("count_in","Enter Count",value=""),
+  actionButton("rec_cnt","Record"),
+  actionButton("resample","Resample"),
+  actionButton("refresh", "Refresh") 
+)
+
+  values<-reactiveValues(df.data=NULL)
+observeEvent(input$rec_cnt,{
+  values$df.data=c(values$df.data,input$count_in)
+})
+```
+
+```{r echo=F}
+  renderTable({
+  data.frame(`Recorded Count`=values$df.data)
+  },striped=TRUE,colnames = T)
+```
+
+
+```{r echo=FALSE}
+inputPanel(
+  actionButton("compute","Compute")  
+)
+ci<-reactiveValues(n=1,mu=1,se=1,LB=0,UB=1)
+observeEvent(input$compute,{
+  N<-as.numeric(input$n_points)
+  ci$n = length(values$df.data)
+  if(ci$n==1) 
+  {
+    ci$mu = values$df.data/N
+    ci$se = sqrt(ci$mu*(1-ci$mu)/N)
+    ci$LB = 100*round(ci$mu-qnorm(1-.05/2)*ci$se,2)
+    ci$UB = 100*round(ci$mu+qnorm(1-.05/2)*ci$se,2)
+  }
+  else
+  {
+    ci$mu = mean(values$df.data/N)
+    ci$se = sd(values$df.data/N)/sqrt(ci$n)
+    ci$LB = 100*round(ci$mu-qt(1-.05/2,ci$n-1)*ci$se,2)
+    ci$UB = 100*round(ci$mu+qt(1-.05/2,ci$n-1)*ci$se,2)
+  }
+  ci$text=paste0("Between ",ci$LB,'% and ',ci$UB,"% of the Earth's surface is covered by water.")
+  }
+  
+)
+observeEvent(input$n_points,{
+  values$df.data=NULL
+})
+observeEvent(input$refresh,{
+  values$df.data=NULL
+})
+renderText(ci$text)
+```
